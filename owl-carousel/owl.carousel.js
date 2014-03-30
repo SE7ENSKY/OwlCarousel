@@ -20,6 +20,10 @@ if (typeof Object.create !== "function") {
     };
 }
 (function ($, window, document) {
+    var animEnd = 'webkitAnimationEnd oAnimationEnd MSAnimationEnd animationend',
+        transitionEnd = 'webkitTransitionEnd oTransitionEnd otransitionend MSTransitionEnd transitionend';
+
+    var wait = function(fn){ setTimeout(fn, 0) }
 
     var Carousel = {
         init : function (options, el) {
@@ -30,6 +34,84 @@ if (typeof Object.create !== "function") {
 
             base.userOptions = options;
             base.loadContent();
+            if (base.options.bookFlip) {
+                base.bookFlipInit();
+            }
+        },
+
+        bookFlipInit : function() {
+            this.$owlItems.css({
+                position: "absolute",
+                display: "none",
+                zIndex: 0
+            }).eq(this.currentItem).css({
+                display: "block"
+            });
+            this.$owlWrapper.css({
+                height: this.$owlItems.eq(this.currentItem).css("height"),
+                width: "",
+                perspective: "2000px",
+                perspectiveOriginX: "50%",
+                perspectiveOriginY: "50%"
+            })
+            this.wrapperOuter.css("overflow", "visible")
+        },
+
+        bookFlipMove : function(from, to) {
+            var $from = this.$owlItems.eq(from).css({ display: "block", zIndex: 1 })
+            var $to = this.$owlItems.eq(to).css({ display: "block", zIndex: -1 })
+            var clipLeft = { clip: "rect(0, " + (this.itemWidth/2) + "px, auto, auto)" }
+            var clipRight = { clip: "rect(0, auto, auto, " + (this.itemWidth/2) + "px)" }
+            var noClip = { clip: "" }
+            var transitionEnable = { transitionProperty: "transform", transitionDuration: (this.options.slideSpeed / 1000) + "s", transitionTimingFunction: "linear" }
+            var transitionDisable = { transitionProperty: "", transitionDuration: "", transitionTimingFunction: "" }
+            if (to > from) {
+                var $_from = $from.clone().insertAfter($from).css(clipRight)
+                $from.css(clipLeft)
+                $_from.css(transitionEnable)
+                wait(function(){
+                    $_from.css({ transform: "rotateY(-90deg)" }).one(transitionEnd, function(){
+                        $_from.remove()
+                        var $_to = $to.clone().insertAfter($to).css(clipLeft).css({
+                            zIndex: 2,
+                            transform: "rotateY(90deg)"
+                        })
+                        wait(function(){
+                            $_to.css(transitionEnable)
+                            wait(function(){
+                                $_to.css({ transform: "rotateY(0deg)" }).one(transitionEnd, function(){
+                                    $from.css({ display: "none", zIndex: "" }).css(noClip)
+                                    $to.css({ zIndex: "" })
+                                    $_to.remove()
+                                })
+                            })
+                        })
+                    })
+                })
+            } else {
+                var $_from = $from.clone().insertAfter($from).css(clipLeft)
+                $from.css(clipRight)
+                $_from.css(transitionEnable)
+                wait(function(){
+                    $_from.css({ transform: "rotateY(90deg)" }).one(transitionEnd, function(){
+                        $_from.remove()
+                        var $_to = $to.clone().insertAfter($to).css(clipRight).css({
+                            zIndex: 2,
+                            transform: "rotateY(-90deg)"
+                        })
+                        wait(function(){
+                            $_to.css(transitionEnable)
+                            wait(function(){
+                                $_to.css({ transform: "rotateY(0deg)" }).one(transitionEnd, function(){
+                                    $from.css({ display: "none", zIndex: "" }).css(noClip)
+                                    $to.css({ zIndex: "" })
+                                    $_to.remove()
+                                })
+                            })
+                        })
+                    })
+                })
+            }
         },
 
         loadContent : function () {
@@ -213,7 +295,7 @@ if (typeof Object.create !== "function") {
             if (base.options.responsive === false) {
                 return false;
             }
-            if (base.options.singleItem === true) {
+            if (base.options.singleItem === true || base.options.bookFlip === true) {
                 base.options.items = base.orignalItems = 1;
                 base.options.itemsCustom = false;
                 base.options.itemsDesktop = false;
@@ -608,51 +690,59 @@ if (typeof Object.create !== "function") {
                 position = 0;
             }
 
+            var prevItem = base.owl.currentItem;
             base.currentItem = base.owl.currentItem = position;
-            if (base.options.transitionStyle !== false && drag !== "drag" && base.options.items === 1 && base.browser.support3d === true) {
-                base.swapSpeed(0);
-                if (base.browser.support3d === true) {
-                    base.transition3d(base.positionsInArray[position]);
-                } else {
-                    base.css2slide(base.positionsInArray[position], 1);
-                }
-                base.afterGo();
-                base.singleItemTransition();
-                return false;
-            }
-            goToPixel = base.positionsInArray[position];
 
-            if (base.browser.support3d === true) {
-                base.isCss3Finish = false;
-
-                if (speed === true) {
-                    base.swapSpeed("paginationSpeed");
-                    window.setTimeout(function () {
-                        base.isCss3Finish = true;
-                    }, base.options.paginationSpeed);
-
-                } else if (speed === "rewind") {
-                    base.swapSpeed(base.options.rewindSpeed);
-                    window.setTimeout(function () {
-                        base.isCss3Finish = true;
-                    }, base.options.rewindSpeed);
-
-                } else {
-                    base.swapSpeed("slideSpeed");
-                    window.setTimeout(function () {
-                        base.isCss3Finish = true;
-                    }, base.options.slideSpeed);
-                }
-                base.transition3d(goToPixel);
+            if (base.options.bookFlip) {
+                base.bookFlipMove(prevItem, position);
             } else {
-                if (speed === true) {
-                    base.css2slide(goToPixel, base.options.paginationSpeed);
-                } else if (speed === "rewind") {
-                    base.css2slide(goToPixel, base.options.rewindSpeed);
+
+                if (base.options.transitionStyle !== false && drag !== "drag" && base.options.items === 1 && base.browser.support3d === true) {
+                    base.swapSpeed(0);
+                    if (base.browser.support3d === true) {
+                        base.transition3d(base.positionsInArray[position]);
+                    } else {
+                        base.css2slide(base.positionsInArray[position], 1);
+                    }
+                    base.afterGo();
+                    base.singleItemTransition();
+                    return false;
+                }
+                goToPixel = base.positionsInArray[position];
+
+                if (base.browser.support3d === true) {
+                    base.isCss3Finish = false;
+
+                    if (speed === true) {
+                        base.swapSpeed("paginationSpeed");
+                        window.setTimeout(function () {
+                            base.isCss3Finish = true;
+                        }, base.options.paginationSpeed);
+
+                    } else if (speed === "rewind") {
+                        base.swapSpeed(base.options.rewindSpeed);
+                        window.setTimeout(function () {
+                            base.isCss3Finish = true;
+                        }, base.options.rewindSpeed);
+
+                    } else {
+                        base.swapSpeed("slideSpeed");
+                        window.setTimeout(function () {
+                            base.isCss3Finish = true;
+                        }, base.options.slideSpeed);
+                    }
+                    base.transition3d(goToPixel);
                 } else {
-                    base.css2slide(goToPixel, base.options.slideSpeed);
+                    if (speed === true) {
+                        base.css2slide(goToPixel, base.options.paginationSpeed);
+                    } else if (speed === "rewind") {
+                        base.css2slide(goToPixel, base.options.rewindSpeed);
+                    } else {
+                        base.css2slide(goToPixel, base.options.slideSpeed);
+                    }
                 }
             }
+
             base.afterGo();
         },
 
@@ -1286,8 +1376,7 @@ if (typeof Object.create !== "function") {
                 $currentItem = base.$owlItems.eq(base.currentItem),
                 $prevItem = base.$owlItems.eq(base.prevItem),
                 prevPos = Math.abs(base.positionsInArray[base.currentItem]) + base.positionsInArray[base.prevItem],
-                origin = Math.abs(base.positionsInArray[base.currentItem]) + base.itemWidth / 2,
-                animEnd = 'webkitAnimationEnd oAnimationEnd MSAnimationEnd animationend';
+                origin = Math.abs(base.positionsInArray[base.currentItem]) + base.itemWidth / 2;
 
             base.isTransition = true;
 
@@ -1459,6 +1548,7 @@ if (typeof Object.create !== "function") {
         itemsTabletSmall : false,
         itemsMobile : [479, 1],
         singleItem : false,
+        bookFlip : false,
         itemsScaleUp : false,
 
         slideSpeed : 200,
